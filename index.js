@@ -37,7 +37,7 @@ app.post("/api/create-order", async (req, res) => {
         },
         order_meta: {
           return_url:
-            "http://localhost:5173/payment-result?order_id={order_id}",
+            "https://goscanpay.netlify.app/payment-result?order_id={order_id}",
         },
         order_config: {
           payment_methods: {
