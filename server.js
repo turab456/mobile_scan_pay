@@ -6,8 +6,6 @@ import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createServer } from "http";
-import { Server } from "socket.io";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,13 +13,6 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -31,7 +22,6 @@ let stores = [];
 let products = [];
 let orders = [];
 let verifications = [];
-let productRequests = [];
 
 // Load data from JSON files
 function loadData() {
@@ -126,61 +116,6 @@ app.get("/api/products/search", (req, res) => {
   });
 });
 
-app.post("/api/products/request", (req, res) => {
-  try {
-    const { productName, brand, mrp, description, barcode } = req.body;
-
-    if (!productName || productName.trim() === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Product name is required",
-      });
-    }
-
-    const request = {
-      requestId: `REQ${Date.now()}`,
-      productName: productName.trim(),
-      brand: brand?.trim() || "",
-      mrp: mrp || null,
-      description: description?.trim() || "",
-      barcode: barcode?.trim() || "",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-
-    productRequests.push(request);
-
-    console.log(`📦 New product request: ${productName} (${request.requestId})`);
-
-    res.json({
-      success: true,
-      message: "Product request submitted successfully",
-      requestId: request.requestId,
-    });
-  } catch (error) {
-    console.error("Product request error:", error.message);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-app.get("/api/products/requests", (req, res) => {
-  const { status } = req.query;
-
-  let filteredRequests = productRequests;
-  if (status) {
-    filteredRequests = productRequests.filter((r) => r.status === status);
-  }
-
-  // Sort by most recent first
-  filteredRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  res.json({
-    success: true,
-    requests: filteredRequests,
-    count: filteredRequests.length,
-  });
-});
-
 // ==================== ORDER APIs ====================
 
 app.post("/api/orders/create", (req, res) => {
@@ -257,7 +192,6 @@ app.get("/api/orders/:orderId", (req, res) => {
   res.json({ success: true, order });
 });
 
-// BYPASS PAYMENT - Auto-verify for MVP testing
 app.post("/api/orders/:orderId/claim-payment", (req, res) => {
   try {
     const { orderId } = req.params;
@@ -278,18 +212,15 @@ app.post("/api/orders/:orderId/claim-payment", (req, res) => {
       });
     }
 
-    // Manual verification flow - Cashier needs to approve
+    // Update order status
     order.status = "payment_claimed";
     order.paymentClaimedAt = new Date().toISOString();
-    order.utrLast4 = utrLast4 || "0000";
-    order.paidAmount = paidAmount || order.total;
-
-    // Emit to cashier dashboard
-    io.emit("new_payment_claim", order);
+    order.utrLast4 = utrLast4;
+    order.paidAmount = paidAmount;
 
     res.json({
       success: true,
-      message: "Payment claimed. Waiting for cashier verification.",
+      message: "Payment claimed. Awaiting verification.",
       order,
     });
   } catch (error) {
@@ -304,10 +235,7 @@ app.get("/api/cashier/pending-orders", (req, res) => {
   const { storeId } = req.query;
 
   let pendingOrders = orders.filter(
-    (o) =>
-      o.status === "payment_claimed" ||
-      o.status === "pending_payment" ||
-      o.status === "verified"
+    (o) => o.status === "payment_claimed" || o.status === "pending_payment"
   );
 
   if (storeId) {
@@ -357,17 +285,6 @@ app.post("/api/cashier/verify-order", (req, res) => {
       notes,
       timestamp: new Date().toISOString(),
     });
-
-    // Emit real-time update to customer
-    io.emit(`order_update_${orderId}`, {
-      orderId,
-      status: order.status,
-      verified,
-      order
-    });
-
-    // Emit to cashier dashboard
-    io.emit("order_verified", order);
 
     res.json({
       success: true,
@@ -447,16 +364,14 @@ app.get("/api/analytics/dashboard", (req, res) => {
   const today = new Date().toISOString().split("T")[0];
   const todayOrders = storeOrders.filter((o) => o.createdAt.startsWith(today));
 
-  const completedOrders = storeOrders.filter(
-    (o) => o.status === "completed" || o.status === "verified"
-  );
+  const completedOrders = storeOrders.filter((o) => o.status === "completed");
   const pendingOrders = storeOrders.filter(
     (o) => o.status === "pending_payment" || o.status === "payment_claimed"
   );
 
   const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
   const todayRevenue = todayOrders
-    .filter((o) => o.status === "completed" || o.status === "verified")
+    .filter((o) => o.status === "completed")
     .reduce((sum, o) => sum + o.total, 0);
 
   res.json({
@@ -481,12 +396,8 @@ app.get("/api/analytics/dashboard", (req, res) => {
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message:
-      "Scan & Go SaaS Backend Running (Manual Payment Verification)",
+    message: "Scan & Go SaaS Backend Running",
     version: "1.0.0",
-    mode: "production",
-    paymentBypass: false,
-    websocket: true,
     endpoints: {
       stores: "/api/stores",
       products: "/api/products",
@@ -502,39 +413,16 @@ app.get("/", (req, res) => {
   });
 });
 
-// ==================== WEBSOCKET HANDLERS ====================
-
-io.on("connection", (socket) => {
-  console.log(`✅ Client connected: ${socket.id}`);
-
-  // Customer subscribes to their order updates
-  socket.on("subscribe_order", (orderId) => {
-    socket.join(`order_${orderId}`);
-    console.log(`📱 Customer subscribed to order: ${orderId}`);
-  });
-
-  // Cashier subscribes to pending orders
-  socket.on("subscribe_cashier", () => {
-    socket.join("cashier_room");
-    console.log(`💼 Cashier subscribed to pending orders`);
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`❌ Client disconnected: ${socket.id}`);
-  });
-});
-
 // ==================== START SERVER ====================
 
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════╗
-║   🚀 Scan & Go SaaS Backend (Manual Verification)   ║
+║   🚀 Scan & Go SaaS Backend Server Running           ║
 ║   📍 Port: ${PORT}                                      ║
 ║   🏪 Stores: ${stores.length}                                         ║
 ║   📦 Products: ${products.length}                                       ║
-║   🔌 WebSocket: ENABLED (Real-time updates)          ║
 ║   ✅ Ready for testing!                               ║
 ╚═══════════════════════════════════════════════════════╝
   `);

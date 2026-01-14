@@ -1,0 +1,13 @@
+[
+  {
+    "storeId": "STORE001",
+    "storeName": "Inam's Grocery Mart",
+    "ownerName": "Inam Hasan",
+    "phone": "+919876543210",
+    "address": "123 Main Street, Bangalore",
+    "upiId": "inamgrocery@paytm",
+    "upiQrCode": "upi://pay?pa=inamgrocery@paytm&pn=Inam%20Grocery&cu=INR",
+    "isActive": true,
+    "createdAt": "2026-01-12T00:00:00.000Z"
+  }
+]
