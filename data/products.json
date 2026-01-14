@@ -1,5 +1,5 @@
 [
-  {"productId": "P001", "barcode": "8901030895326", "name": "Tata Salt - 1kg", "brand": "Tata", "category": "Staples", "price": 22, "mrp": 25, "unit": "1kg", "inStock": true},
+  {"productId": "P001", "barcode": "8906080604751", "name": "Paper boat Swing - 1Lt", "brand": "PB", "category": "juices", "price": 22, "mrp": 25, "unit": "1Lt", "inStock": true},
   {"productId": "P002", "barcode": "8901030853487", "name": "Fortune Sunflower Oil - 1L", "brand": "Fortune", "category": "Cooking Oil", "price": 145, "mrp": 150, "unit": "1L", "inStock": true},
   {"productId": "P003", "barcode": "8901725123451", "name": "Amul Butter - 500g", "brand": "Amul", "category": "Dairy", "price": 285, "mrp": 290, "unit": "500g", "inStock": true},
   {"productId": "P004", "barcode": "8901063111226", "name": "Maggi 2-Minute Noodles", "brand": "Maggi", "category": "Instant Food", "price": 12, "mrp": 14, "unit": "70g", "inStock": true},
